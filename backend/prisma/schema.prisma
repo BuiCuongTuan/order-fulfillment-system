@@ -1,0 +1,188 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// === ENUMS ===
+enum OrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SHIPPING
+  COMPLETED
+}
+
+enum ActionType {
+  INSERT
+  UPDATE
+  DELETE
+}
+
+// === MODELS ===
+
+model Role {
+  id          Int     @id @default(autoincrement())
+  code        String  @unique // e.g. ADMIN, SALES, WAREHOUSE_MANAGER, ACCOUNTANT
+  name        String
+  description String?
+
+  users User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("roles")
+}
+
+model User {
+  id           Int    @id @default(autoincrement())
+  email        String @unique
+  passwordHash String
+  fullName     String
+
+  roleId Int
+  role   Role @relation(fields: [roleId], references: [id])
+
+  ordersCreated Order[]       @relation("CreatedOrders")
+  approvals     ApprovalLog[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft delete - Never hard delete for audit integrity
+
+  @@map("users")
+}
+
+model Category {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique
+  description String?
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("categories")
+}
+
+model Product {
+  id          Int     @id @default(autoincrement())
+  sku         String  @unique
+  name        String
+  description String?
+  price       Decimal @db.Decimal(15, 2)
+
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  stockLevels StockLevel[]
+  orderItems  OrderItem[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft delete
+
+  @@map("products")
+}
+
+model Warehouse {
+  id       Int     @id @default(autoincrement())
+  code     String  @unique
+  name     String
+  location String?
+
+  stockLevels StockLevel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("warehouses")
+}
+
+model StockLevel {
+  id          Int @id @default(autoincrement())
+  productId   Int
+  warehouseId Int
+  quantity    Int @default(0) // Thêm Check Constraint ở DB level thông qua SQL custom sau nếu muốn, hoặc validate chặt bằng Zod/TypeScript.
+
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, warehouseId])
+  @@map("stock_levels")
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  orderCode   String      @unique // Mã đơn hàng (VD: ORD20261001)
+  status      OrderStatus @default(DRAFT)
+  totalAmount Decimal     @db.Decimal(15, 2) // Tiền tệ chống sai số
+
+  createdById Int
+  createdBy   User @relation("CreatedOrders", fields: [createdById], references: [id])
+
+  items        OrderItem[]
+  approvalLogs ApprovalLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int
+  unitPrice Decimal @db.Decimal(15, 2) // Price immutability
+  subTotal  Decimal @db.Decimal(15, 2)
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model ApprovalLog {
+  id      Int     @id @default(autoincrement())
+  orderId Int
+  userId  Int // The manager who approved/rejected
+  action  String // APPROVED or REJECTED
+  comment String?
+
+  order Order @relation(fields: [orderId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("approval_logs")
+}
+
+// Do Prisma không cho đa hình động (Dynamic Polymorphism), lưu recordId là Int kết hợp với tableName, ta sẽ log Audit trực tiếp ở tầng NestJS.
+model SystemLog {
+  id        Int        @id @default(autoincrement())
+  tableName String
+  recordId  Int
+  action    ActionType
+  oldData   Json?
+  newData   Json?
+  userId    Int? // Ai là người tác động thay đổi
+
+  createdAt DateTime @default(now())
+
+  @@map("system_logs")
+}
