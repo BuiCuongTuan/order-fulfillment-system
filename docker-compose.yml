@@ -7,12 +7,14 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: '12345678'
       POSTGRES_DB: order_fulfillment
     ports:
-      - '5432:5432'
+      - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ofs-network
 
   pgadmin:
     image: dpage/pgadmin4
@@ -25,6 +27,39 @@ services:
       - '5050:80'
     depends_on:
       - db
+    networks:
+      - ofs-network
+
+  backend:
+    build:
+      context: ./backend
+    container_name: ofs_backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://postgres:12345678@db:5432/order_fulfillment?schema=public
+      - JWT_SECRET=super_secret_enterprise_key_2026
+    ports:
+      - '3000:3000'
+    depends_on:
+      - db
+    networks:
+      - ofs-network
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: ofs_frontend
+    restart: always
+    ports:
+      - '80:80'
+    depends_on:
+      - backend
+    networks:
+      - ofs-network
+
+networks:
+  ofs-network:
+    driver: bridge
 
 volumes:
   postgres_data:
