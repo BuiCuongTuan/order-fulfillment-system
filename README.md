@@ -68,7 +68,7 @@ _(Note: In PgAdmin, when registering the database connection server, use `Host: 
 
 ---
 
-## 🏗️ Architecture Blueprint
+## Architecture Blueprint
 
 ```mermaid
 graph TD
@@ -78,7 +78,7 @@ graph TD
     Nginx -->|Reverse Proxy /api/*| NestJS[Backend NestJS :3000]
     NestJS -.->|Prisma ORM| DB[(PostgreSQL :5432)]
 
-    subgraph Docker Internal Network (ofs-network)
+    subgraph DockerNetwork ["Docker Internal Network (ofs-network)"]
     Nginx
     NestJS
     DB
